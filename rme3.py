@@ -3,7 +3,7 @@ import numpy as np
 import time
 import serial
 
-OFFSET = 1 #NUMBER OF FRAMES TO OFFSET
+OFFSET = 50 #NUMBER OF FRAMES TO OFFSET
 # ser = serial.Serial('/dev/cu.usbmodem141401') #SERIAL PORT
 
 cap = cv2.VideoCapture(0) # 0 is the default camera device index
@@ -24,25 +24,26 @@ while t < OFFSET:
 
 t = 0
 
-def add_noise(image, prob):
+probs = np.random.random(buffer[0].shape[:2])
+
+def distort(image, amt):
+
     output = image.copy()
-    if len(image.shape) == 2:
-        black = 0
-        white = 255
-    else:
-        colorspace = image.shape[2]
-        if colorspace == 3:  # RGB
-            black = np.array([0, 0, 0], dtype='uint8')
-            white = np.array([255, 255, 255], dtype='uint8')
-        else:  # RGBA
-            black = np.array([0, 0, 0, 255], dtype='uint8')
-            white = np.array([255, 255, 255, 255], dtype='uint8')
-    probs = np.random.random(output.shape[:2])
-    output[probs < (prob / 2)] = black
-    output[probs > 1 - (prob / 2)] = white
+    colorspace = image.shape[2]
+    black = np.array([0, 0, 0], dtype='uint8')
+    white = np.array([255, 255, 255], dtype='uint8')
+    
+    output[probs < (amt / 2)] = black
+    output[probs > 1 - (amt / 2)] = white
+
+    # # grayscale
+    # r, g, b = cv2.split(image)
+    # gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    # gr, gg, gb = 100, 100, 100
+
+    # output = np.maximum(0.2989 * r, gr) + np.maximum(0.5870 * g, gg) + np.maximum(0.1140 * b, gb)
+
     return output
-
-
 
 while True:
     ret, frame = cap.read()
@@ -56,21 +57,32 @@ while True:
 
     t += 1
 
-    detect face
+    # detect face
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(frame, scaleFactor=1.3, minNeighbors=3, minSize=(30, 30))
+    faces = face_cascade.detectMultiScale(frame, scaleFactor=1.25, minNeighbors=3, minSize=(30, 30))
     
     # if there's a face, distort
     if (len(faces) > 0):
-        res = cv2.cvtColor(res, cv2.COLOR_BGR2GRAY)
-        ser.write(b'face')
+        # draw a rectangle first
+        for (x, y, w, h) in faces:
+            cv2.rectangle(frame, (x, y), ((x + w), (y + h)), (255, 0, 0), 2)
+        
+        if facetime < 25:
+            facetime += 2
+        elif facetime * 1000 >= .1:
+            facetime -= 3
+        else:
+            facetime += 1
+
+        # ser.write(b'face')
     
     # otherwise, continue
     else:
-        ser.write(b'no face')
+        # ser.write(b'no face')
         res = res 
+        facetime -= 3
     
-    res = add_noise(res, .3)
+    res = distort(res, facetime / 1000)
 
     res = cv2.flip(res, 1)
     cv2.imshow("a", res)
