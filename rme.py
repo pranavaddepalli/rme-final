@@ -1,53 +1,54 @@
 import cv2
+import numpy as np
 
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_frontalface_default.xml')
-eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_eye.xml')
-smile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_smile.xml')
+# load the Haar Cascade classifier for face detection
+face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 
+# load the smile detection algorithm
+smile_cascade = cv2.CascadeClassifier('haarcascade_smile.xml')
 
-def detect(gray, frame):
-    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+# function to check if a person is smiling
+def is_smiling(gray_face):
+    smiles = smile_cascade.detectMultiScale(gray_face, scaleFactor=1.7, minNeighbors=30, minSize=(25, 25))
+    for (sx, sy, sw, sh) in smiles:
+        return True
+    return False
+
+# main loop to capture and display the distorted live feed
+cap = cv2.VideoCapture(0) # 0 is the default camera device index
+while True:
+    ret, frame = cap.read()
     
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5, minSize=(30, 30))
     
-    res = frame
-    blurred = cv2.blur(frame, (30, 30), cv2.BORDER_DEFAULT)
-    if (len(faces) == 0):
-        res = blurred
+    # split the image into its color channels
+    b, g, r = cv2.split(frame)
 
-    for (x, y, w, h) in faces:
-        cv2.rectangle(frame, (x, y), ((x + w), (y + h)), (255, 0, 0), 2)
-        roi_gray = gray[y:y + h, x:x + w]
-        roi_color = frame[y:y + h, x:x + w]
-        smiles = smile_cascade.detectMultiScale(roi_gray, 2.9, 20)
+    # shift the green and blue channels to create chromatic aberration
+    rows, cols, _ = frame.shape
+    shift_matrix = np.float32([[1, 0, -10], [0, 1, 10]])
+    g = cv2.warpAffine(g, shift_matrix, (cols, rows))
+    shift_matrix = np.float32([[1, 0, 10], [0, 1, -10]])
+    b = cv2.warpAffine(b, shift_matrix, (cols, rows))
 
-        if (len(smiles) == 0):
-            res = blurred
-        
-        for (sx, sy, sw, sh) in smiles:
-            cv2.rectangle(roi_color, (sx, sy), ((sx + sw), (sy + sh)), (0, 0, 255), 2)
+    # merge the color channels back together
+    color_frame = cv2.merge((b, g, r))
 
-    return res
-
-video_capture = cv2.VideoCapture(0)
-while video_capture.isOpened():
-   # Captures video_capture frame by frame
-    _, frame = video_capture.read() 
-  
-    # To capture image in monochrome                    
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  
-      
-    # calls the detect() function    
-    canvas = detect(gray, frame)   
-
+    # check if a face is detected and if the person is smiling
+    if len(faces) > 0:
+        for (x, y, w, h) in faces:
+            face_gray = gray[y:y+h, x:x+w]
+            if is_smiling(face_gray):
+                cv2.imshow('normal live feed', frame)
+            else:
+                cv2.imshow('distorted live feed', color_frame)
+                break
+    else:        
+        cv2.imshow('distorted live feed', color_frame)
     
-  
-    # Displays the result on camera feed                     
-    cv2.imshow('Video', canvas) 
-  
-    # The control breaks once q key is pressed                        
-    if cv2.waitKey(1) & 0xff == ord('q'):               
+    if cv2.waitKey(1) == ord('q'): # press 'q' to exit the loop
         break
-  
-# Release the capture once all the processing is done.
-video_capture.release()                                 
+
+cap.release()
 cv2.destroyAllWindows()
