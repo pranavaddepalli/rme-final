@@ -75,8 +75,8 @@ while True:
     # if there's a face, distort
     if (len(faces) > 0):
         # draw a rectangle first
-        for (x, y, w, h) in faces:
-            cv2.rectangle(frame, (x, y), ((x + w), (y + h)), (255, 0, 0), 2)
+        # for (x, y, w, h) in faces:
+        #     cv2.rectangle(frame, (x, y), ((x + w), (y + h)), (255, 0, 0), 2)
         
         facetime += DISTORTSPEED
         grayedout = True
