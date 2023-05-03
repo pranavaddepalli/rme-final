@@ -3,8 +3,14 @@ import numpy as np
 import time
 import serial
 
-OFFSET = 50 #NUMBER OF FRAMES TO OFFSET
-# ser = serial.Serial('/dev/cu.usbmodem141401') #SERIAL PORT
+OFFSET = 25 #NUMBER OF FRAMES TO OFFSET
+# ser = serial.Serial(port='/dev/cu.usbmodem141401') #SERIAL PORT
+# print(ser.name)
+# ser.write(b'WE OUT HERE ON THE SERIAL PORTTTTT\n')
+
+time.sleep(2)
+
+DISTORTSPEED = 2; # HOW FAST TO DISTORT (1 IS .1 PER FRAME OUT OF 1)
 
 cap = cv2.VideoCapture(0) # 0 is the default camera device index
 
@@ -15,6 +21,8 @@ facetime = 0 # track how long the face has been on screen
 
 face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 
+brokenmirror = cv2.imread('brokenmirror.png')
+brokenmirror = cv2.cvtColor(brokenmirror, cv2.COLOR_BGR2GRAY)
 
 # initalize with five seconds of buffer 
 while t < OFFSET:
@@ -27,25 +35,28 @@ t = 0
 probs = np.random.random(buffer[0].shape[:2])
 
 def distort(image, amt):
-
-    output = image.copy()
-    colorspace = image.shape[2]
-    black = np.array([0, 0, 0], dtype='uint8')
-    white = np.array([255, 255, 255], dtype='uint8')
+    amt = max(0, amt)
+    amt = min(1, amt)
+    # AMT SHOULD BE BETWEEN 0 AND 1: 0 IS MORE COLOR, 1 IS MORE GRAY
+    # output = image.copy()
+    # colorspace = image.shape[2]
+    # black = np.array([0, 0, 0], dtype='uint8')
+    # white = np.array([255, 255, 255], dtype='uint8')
     
-    output[probs < (amt / 2)] = black
-    output[probs > 1 - (amt / 2)] = white
+    # output[probs < (amt / 2)] = black
+    # output[probs > 1 - (amt / 2)] = white
 
     # # grayscale
     # r, g, b = cv2.split(image)
-    # gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # gr, gg, gb = 100, 100, 100
-
-    # output = np.maximum(0.2989 * r, gr) + np.maximum(0.5870 * g, gg) + np.maximum(0.1140 * b, gb)
-
+    
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    graybgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    output = cv2.addWeighted(image, 1 - amt, graybgr, amt, 0)
     return output
 
+
 while True:
+    grayedout = False
     ret, frame = cap.read()
         
     # write to the buffer
@@ -67,24 +78,28 @@ while True:
         for (x, y, w, h) in faces:
             cv2.rectangle(frame, (x, y), ((x + w), (y + h)), (255, 0, 0), 2)
         
-        if facetime < 25:
-            facetime += 2
-        elif facetime * 1000 >= .1:
-            facetime -= 3
-        else:
-            facetime += 1
+        facetime += DISTORTSPEED
+        grayedout = True
 
         # ser.write(b'face')
     
     # otherwise, continue
     else:
-        # ser.write(b'no face')
-        res = res 
-        facetime -= 3
+        if(grayedout):
+            facetime -= DISTORTSPEED
+            if(facetime == 0):
+                grayedout = False
+        else:
+            facetime = 0
+
     
-    res = distort(res, facetime / 1000)
+   
+    res = distort(res, facetime / 10)
 
     res = cv2.flip(res, 1)
+    
+    # res = cv2.addWeighted(res, 0.5, brokenmirror, 0.7, 0)
+    
     cv2.imshow("a", res)
     
     if cv2.waitKey(1) == ord('q'): # press 'q' to exit the loop
